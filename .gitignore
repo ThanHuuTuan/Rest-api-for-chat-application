@@ -1,7 +1,18 @@
 
 .DS_STORE
+chat-app.sublime-project
+chat-app.sublime-workspace
+
 .Python
 build/
+.env
+.venv
+env/
+venv/
+ENV/
+bin/
+include/
+pip-selfcheck.json
 develop-eggs/
 dist/
 downloads/
@@ -25,8 +36,7 @@ wheels/
 pip-log.txt
 pip-delete-this-directory.txt
 
-chat-app.sublime-project
-chat-app.sublime-project
+
 
 *.log
 local_settings.py
@@ -40,9 +50,5 @@ target/
 
 celerybeat-schedule
 
-.env
-.venv
-env/
-venv/
-ENV/
+
 
