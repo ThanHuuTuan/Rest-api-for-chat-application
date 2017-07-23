@@ -4,6 +4,8 @@ chat-app.sublime-project
 chat-app.sublime-workspace
 
 .Python
+.pyc
+db.sqlite3
 build/
 .env
 .venv
