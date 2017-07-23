@@ -15,6 +15,8 @@ import logging
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
+
+''' User Registration api endpoint ''' 
 class UserRegisterView(View):
 
 	def post(self,request):
@@ -48,7 +50,8 @@ class UserRegisterView(View):
 
 		return HttpResponse(json.dumps(context),'application/json')
 		
-        
+
+''' Login and Logout api endpoint '''    
 class UserLoginLogoutView(View):
 
 	def post(self,request):

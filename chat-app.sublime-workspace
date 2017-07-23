@@ -169,13 +169,11 @@
 			}
 		},
 		{
-			"contents": "from django.shortcuts import render, get_object_or_404, redirect\nfrom django.views.generic import View\nfrom .models import Chat, Message, UserChatStatus\nfrom django.http import HttpResponse, Http404\nfrom django.core.paginator import Paginator, EmptyPage, PageNotAnInteger\nfrom django.contrib.auth.models import User\nfrom django.db.models import Q\nimport json\nimport time\nimport logging\n\nlogger = logging.getLogger(__name__)\n\n# creates a chat group \nclass ChatCreateView(View):\n\n\tdef post(self, request):\n\n\t\tcontext = {'flag':'unsuccessful'}\n\t\tchat = Chat()\n\t\tlogger.debug('Getting chat group data..')\n\t\tdata = dict(request.POST or None)\n\t\tif data:\n\t\t\tlogger.info('succesfuly fetched group data')\n\t\t\tchat.title = data.get('title')\n\t\t\tchat.save()\n\t\ttry:\n\t\t\tuser_chat_status = UserChatStatus(chat=chat, user=request.user)\n\t\texcept:\n\t\t\tlogger.error('Invalid User')\n\t\t\traise Http404('Invalid User')\n\t\tuser_chat_status.is_owner = True\n\t\tuser_chat_status.save()\n\t\tlogger.info('Successfully created chat group')\n\t\tno_of_users = chat.users.all()\n\t\tc= len(no_of_users)\n\t\tcontext = {\n\t\t\t\t'flag' : 'successfully created group',\n\t\t\t\t'title' : chat.title,\n\t\t\t\t'created_by' : str(request.user),\n\t\t\t\t'no of users' : c,\n\t\t}\n\n\t\treturn HttpResponse(json.dumps(context),'application/json')\n\n# adds user to the existing group, permission to be checked - if the user is the owner of the group or the super user then he can \n# users to the existing group\nclass ChatAddUserView(View):\n\n\tdef post(self, request, slug=None):\n\t\tcontext = {'flag':'unsuccessful'}\n\t\tchat = Chat.objects.get(slug=slug)\n\t\tdata = dict(request.POST or None)\n\t\tnew_userid = int(data.get('new_user')[0])\n\t\ttry:\n\t\t\tuser = User.objects.get(id=new_userid)\n\t\texcept:\n\t\t\tlogger.error('user does not exists')\n\t\t\traise Http404(\"user does not exists\")\n\t\t\t\n\t\ttry:\n\t\t\tuser_chat_status = UserChatStatus.objects.filter(Q(is_owner=True), Q(user_id=request.user.id) | Q(request.user.is_superuser))\n\t\texcept:\n\t\t\tlogger.warning('Permission denied')\n\t\t\traise Http404(\"Permission denied\")\n\t\t\n\t\tif chat.add_user(user):\n\t\t\tlogger.info('adding user to the group')\n\t\t\tcontext = {\n\t\t\t\t'flag' : 'successfully added',\n\t\t\t\t'title' : chat.title,\n\t\t\t\t'created_at' : time.strftime(str(chat.created_at))[:19],\n\t\t\t\t'new user' : user.username,\n\t\t\t\t}\n\t\t\n\t\treturn HttpResponse(json.dumps(context),'application/json')\n\n# removes chat from the database, permission to be checked either the owner of the group or superuser can delete the group.\nclass ChatDeleteView(View):\n\n\tdef delete(self, request, slug=None):\n\t\tcontext = {'flag' : 'deletion unsuccessful'}\n\t\ttry:\n\t\t\tuser_chat_status = UserChatStatus.objects.filter(Q(is_owner=True), Q(user_id=request.user.id) | Q(request.user.is_superuser))\n\t\texcept:\n\t\t\tlogger.warning('Permission denied')\n\t\t\traise Http404(\"Permission denied\")\n\n\t\tobj = Chat.objects.get(slug=slug)\n\t\tif obj is not None:\n\t\t\tobj.delete()\n\t\t\tlogger.info('successfully deleted from the database')\n\t\t\tcontext = {'flag' : 'deletion successful'}\n\n\t\treturn HttpResponse(json.dumps(context),'application/json')\n\n\n# retrieves all the chats specific to the group from the database and also provides a search query string which retrieves the\n# chat group related to the given query\nclass ChatListView(View):\n\t\n\tdef get(self, request, id=None):\n\t\tcontext = {'flag':'unsuccessful'}\n\t\tlogger.info('fetching user chat from the database')\n\t\tuser = User.objects.all()\n\t\tchats = Chat.objects.all()\n\t\tfor chat in chats:\n\t\t\tcontext[chat.id] = {}\n\t\t\tcontext[chat.id]['title'] = chat.title\n\t\t\tcontext[chat.id]['created_at'] = time.strftime(str(chat.created_at))[:19]\n\t\t\tcontext[chat.id]['members'] = []\n\t\t\tfor member in chat.users.all():\n\t\t\t\tcontext[chat.id]['members'].append(member.username)\n\t\tcontext = {'flag':'successful'}\n\t\tlogger.debug('getting search query')\n\t\tquery = request.GET.get(\"q\")\n\t\tqueryset_list = []\n\t\tif query:\n\t\t\tqueryset_list = Chat.objects.filter(\n\t\t\t\tQ(title__icontains=query) |\n\t\t\t\tQ(slug__icontains=query) |\n\t\t\t\tQ(message__message__icontains=query) \n\t\t\t\t).distinct()\n\n\t\tcontext['query_result'] = []\n\t\tfor q in queryset_list:\n\t\t\tcontext['query_result'].append(str(q))\n\t\t\tcontext['search'] = 'successful'\n\t\tlogger.info('search successful')\n\t\treturn HttpResponse(json.dumps(context),'application/json')\n\n# retrieves the details of a particular chat group\nclass ChatDetailView(View):\n\n\tdef get(self, request, slug=None):\n\t\tcontext = {}\n\t\tlogger.info('fetching chat details')\n\t\tobj = Chat.objects.get(slug=slug)\n\t\tif obj:\n\t\t\tlogger.info('succesfully fetched')\n\t\t\tcontext[obj.id] = {}\n\t\t\tcontext[obj.id]['title'] = obj.title\n\t\t\tcontext[obj.id]['created_at'] = time.strftime(str(obj.created_at))[:19]\n\t\t\tcontext[obj.id]['members'] = []\n\t\t\tfor member in obj.users.all():\n\t\t\t\tprint (member.username)\n\t\t\t\tcontext[obj.id]['members'].append(member.username)\n\t\telse:\n\t\t\tlogger.error('Empty object')\n\t\treturn HttpResponse(json.dumps(context),'application/json')\n\n# posts a message into a chat group and retrieves all the messages related to the chat and paginates the message query list\nclass MessageRetrieveCreateView(View):\n\n\tdef post(self, request, slug=None):\n\t\tcontext = {'flag' : 'message not sent'}\n\t\ttry:\n\t\t\tchat = Chat.objects.get(slug=slug)\n\t\texcept:\n\t\t\tlogger.error('invalid group')\n\t\t\traise Http404('invalid group')\n\n\t\tobj = Message()\n\t\tdata = dict(request.POST or None)\n\t\tif data:\n\t\t\tlogger.info('saving message to the group')\n\t\t\tobj.user = request.user\n\t\t\ttry:\n\t\t\t\tobj.message = data.get('message')\n\t\t\texcept:\n\t\t\t\tlogger.error('No message given')\n\t\t\t\traise Http404('Try again, could not post message ')\n\t\t\tobj.chat = chat\n\t\t\tobj.save()\n\t\t\tcontext = {\n\t\t\t\t'flag' : 'message sent successfully',\n\t\t\t\t'message' : obj.message,\n\t\t\t\t'sender' : request.user.username,\n\t\t\t} \n\n\t\treturn HttpResponse(json.dumps(context),'application/json')\n\n\n\tdef get(self, request, slug=None):\n\t\t\n\t\tcontext = {'flag' : 'message cannot be loaded'}\n\t\ttry:\n\t\t\tobj = Chat.objects.get(slug=slug)\n\t\t\tqueryset_list = obj.message_set.all().prefetch_related('chat')\n\t\texcept:\n\t\t\tlogger.error('message cannot be loaded')\n\t\t\traise Http404\n\n\t\tmessage_list = []\n\t\tfor msg in queryset_list:\n\t\t\tprint ('msg',msg)\n\t\t\tmessage_list.append(str(msg))\n\n\t\tpaginator = Paginator(queryset_list, 2)\t# 2 items per page \n\t\tpage = request.GET.get('page')\n\t\tprint ('page', page)\n\t\ttry:\n\t\t\tqueryset = paginator.page(page)\n\t\t\t\n\t\texcept PageNotAnInteger:\t\t\t\t# If page is not an integer, deliver first page.\n\t\t\tqueryset = paginator.page(1)\n\t\t\t\n\t\texcept EmptyPage:\t\t\t\t\t\t# If page is out of range (e.g. 9999), deliver last page of results.\n\t\t\tqueryset = paginator.page(paginator.num_pages)\n\n\t\tcontext = {\n\t\t\t'flag' : 'message successfuly loaded', \n\t\t\t'page_request_var' : page,\n\t\t\t'messages' : message_list,\n\t\t}\n\n\t\treturn HttpResponse(json.dumps(context),'application/json')\n\n\n\n\n\n\n# f=0\n#         for i in range(len(tup)):\n#             if abs(i+1 - tup[i]) != k:\n#                 f=1\n#                 break\n#         if f==0:\n#             l.append(tup)\n# -----\nfor tup in (tuple(c) for c in it.permutations(range(1,n+1))):\n        t = tuple(range(1,len(tup)+1))\n        #print ('t',ttup)\n        diff = tuple(abs(x-y) for x,y in zip(tup,t) if x-y == k)\n        print ('f',diff)\n        if sum(diff) == 0:\n            #print (tup)\n            l.append(tup)\n        \n        \n        \n    #print ('l',l)\n    \n    if len(l)>0:\n        print (*l[0])\n    else:\n        print (-1)\n\n\n\n",
 			"file": "src/chat/views.py",
-			"file_size": 6936,
-			"file_write_time": 131400273820000000,
 			"settings":
 			{
-				"buffer_size": 7356,
+				"buffer_size": 6755,
+				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
 		},
@@ -189,19 +187,20 @@
 			}
 		},
 		{
-			"file": "src/chat_app/urls.py",
+			"file": "src/accounts/models.py",
 			"settings":
 			{
-				"buffer_size": 918,
+				"buffer_size": 1114,
 				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
 		},
 		{
-			"file": "src/accounts/urls.py",
+			"file": "src/chat_app/urls.py",
 			"settings":
 			{
-				"buffer_size": 330,
+				"buffer_size": 918,
+				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
 		},
@@ -257,11 +256,7 @@
 	"expanded_folders":
 	[
 		"/Users/arishhaque/Desktop/test/django1.9/env/chat-app",
-		"/Users/arishhaque/Desktop/test/django1.9/env/chat-app/src",
-		"/Users/arishhaque/Desktop/test/django1.9/env/chat-app/src/accounts",
-		"/Users/arishhaque/Desktop/test/django1.9/env/chat-app/src/chat",
-		"/Users/arishhaque/Desktop/test/django1.9/env/chat-app/src/chat/migrations",
-		"/Users/arishhaque/Desktop/test/django1.9/env/chat-app/src/chat_app"
+		"/Users/arishhaque/Desktop/test/django1.9/env/chat-app/src"
 	],
 	"file_history":
 	[
@@ -359,7 +354,7 @@
 	"groups":
 	[
 		{
-			"selected": 1,
+			"selected": 0,
 			"sheets":
 			[
 				{
@@ -375,8 +370,8 @@
 						"selection":
 						[
 							[
-								2797,
-								2797
+								2551,
+								2551
 							]
 						],
 						"settings":
@@ -387,7 +382,7 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 1,
+					"stack_index": 0,
 					"type": "text"
 				},
 				{
@@ -396,15 +391,15 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 7356,
+						"buffer_size": 6755,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								7207,
-								7207
+								198,
+								111
 							]
 						],
 						"settings":
@@ -413,10 +408,10 @@
 							"translate_tabs_to_spaces": false
 						},
 						"translation.x": 0.0,
-						"translation.y": 3037.0,
+						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 0,
+					"stack_index": 1,
 					"type": "text"
 				},
 				{
@@ -432,8 +427,8 @@
 						"selection":
 						[
 							[
-								2085,
-								2085
+								424,
+								424
 							]
 						],
 						"settings":
@@ -442,27 +437,27 @@
 							"translate_tabs_to_spaces": false
 						},
 						"translation.x": 0.0,
-						"translation.y": 367.0,
+						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 2,
+					"stack_index": 4,
 					"type": "text"
 				},
 				{
 					"buffer": 3,
-					"file": "src/chat_app/urls.py",
+					"file": "src/accounts/models.py",
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 918,
+						"buffer_size": 1114,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								641,
-								641
+								479,
+								479
 							]
 						],
 						"settings":
@@ -475,29 +470,31 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 4,
+					"stack_index": 5,
 					"type": "text"
 				},
 				{
 					"buffer": 4,
-					"file": "src/accounts/urls.py",
-					"semi_transient": true,
+					"file": "src/chat_app/urls.py",
+					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 330,
+						"buffer_size": 918,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								0,
-								0
+								918,
+								918
 							]
 						],
 						"settings":
 						{
-							"syntax": "Packages/Python/Python.sublime-syntax"
+							"syntax": "Packages/Python/Python.sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
@@ -519,8 +516,8 @@
 						"selection":
 						[
 							[
-								556,
-								556
+								210,
+								267
 							]
 						],
 						"settings":
@@ -531,7 +528,7 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 5,
+					"stack_index": 2,
 					"type": "text"
 				},
 				{

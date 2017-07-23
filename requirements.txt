@@ -1,6 +1,0 @@
-pip packages required for the application
-
-python - 3.6
-Django - 1.9.5
-Database - sqlite3
-

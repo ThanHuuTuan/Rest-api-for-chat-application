@@ -11,7 +11,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# creates a chat group 
+'''creates a chat group. login is required for a user to create a chat group, that user has the admin privileges
+ to add or remove users in that group''' 
 class ChatCreateView(View):
 
 	def post(self, request):
@@ -43,8 +44,8 @@ class ChatCreateView(View):
 
 		return HttpResponse(json.dumps(context),'application/json')
 
-# adds user to the existing group, permission to be checked - if the user is the owner of the group or the super user then he can 
-# users to the existing group
+'''Adds user to the existing group, permission to be checked - if the user is the owner of the group or the super user then he can 
+users to the existing group'''
 class ChatAddUserView(View):
 
 	def post(self, request, slug=None):
@@ -75,7 +76,7 @@ class ChatAddUserView(View):
 		
 		return HttpResponse(json.dumps(context),'application/json')
 
-# removes chat from the database, permission to be checked either the owner of the group or superuser can delete the group.
+''' removes chat, permission to be checked either the owner of the group or superuser can delete the group.'''
 class ChatDeleteView(View):
 
 	def delete(self, request, slug=None):
@@ -95,8 +96,8 @@ class ChatDeleteView(View):
 		return HttpResponse(json.dumps(context),'application/json')
 
 
-# retrieves all the chats specific to the group from the database and also provides a search query string which retrieves the
-# chat group related to the given query
+'''retrieves all the chats specific to the group from the database and also provides a search query string which retrieves the
+chat group related to the given query'''
 class ChatListView(View):
 	
 	def get(self, request, id=None):
@@ -129,7 +130,7 @@ class ChatListView(View):
 		logger.info('search successful')
 		return HttpResponse(json.dumps(context),'application/json')
 
-# retrieves the details of a particular chat group
+'''retrieves the details of a particular chat group such as title, creation time, number of members'''
 class ChatDetailView(View):
 
 	def get(self, request, slug=None):
@@ -149,9 +150,10 @@ class ChatDetailView(View):
 			logger.error('Empty object')
 		return HttpResponse(json.dumps(context),'application/json')
 
-# posts a message into a chat group and retrieves all the messages related to the chat and paginates the message query list
+'''posts a message into a chat group and retrieves all the messages related to the chat and paginates the message query list.'''
 class MessageRetrieveCreateView(View):
 
+	'''post a meesage to a chat group'''
 	def post(self, request, slug=None):
 		context = {'flag' : 'message not sent'}
 		try:
@@ -180,7 +182,7 @@ class MessageRetrieveCreateView(View):
 
 		return HttpResponse(json.dumps(context),'application/json')
 
-
+	'''retreive all the messages'''
 	def get(self, request, slug=None):
 		
 		context = {'flag' : 'message cannot be loaded'}
